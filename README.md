@@ -7,5 +7,5 @@ Toy experiments for researching steganography with LLMs
 To quickly setup a docker:
 
 ```bash
-cd /workspace && git clone https://github.com/filyp/stag-hunt.git && cd sneaky-mamba && pip install -r requirements.txt
+cd /workspace && git clone https://github.com/filyp/steg-hunt.git && cd steg-hunt && pip install -r requirements.txt
 ```
