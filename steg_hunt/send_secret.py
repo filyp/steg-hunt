@@ -11,8 +11,8 @@ from transformers import AutoTokenizer
 from transformers import TrainingArguments, GPT2Tokenizer, GPT2LMHeadModel, Trainer
 
 max_val = 2
-layers_to_use_ann = 12
-layers_to_use_bob = 12
+layers_to_use_ann = 3
+layers_to_use_bob = 3
 layers_to_use_cid = 1
 # wandb.login()
 # wandb.init(project="steg-hunt", name="diffie-hellman-hex-16:4-tr-12l:1l")
@@ -101,9 +101,9 @@ for model in (ann, bob, cid):
 # %%
 training_args = TrainingArguments(
     disable_tqdm=True,  # This disables the progress bars
-    learning_rate=5e-6,
+    learning_rate=5e-4,
     num_train_epochs=1,
-    # per_device_train_batch_size=16,
+    per_device_train_batch_size=64,
     gradient_accumulation_steps=1,
     # dataloader_num_workers=2,
     optim="adamw_torch",
@@ -127,8 +127,8 @@ cid_trainer = MyTrainer(
     tokenizer=tokenizer,
     args=training_args,
 )
-bob_trainer.args.learning_rate = 5e-6
-cid_trainer.args.learning_rate = 5e-7
+# bob_trainer.args.learning_rate = 5e-4
+# cid_trainer.args.learning_rate = 5e-4
 # disable log printing
 ann_trainer.log = lambda logs: None
 bob_trainer.log = lambda logs: None
@@ -138,12 +138,13 @@ cid_trainer.log = lambda logs: None
 gen_args = dict(
     max_new_tokens=1,
     pad_token_id=tokenizer.eos_token_id,
-    temperature=1,
+    temperature=0.5,
+    do_sample=True,
 )
 
 good_token = 777
 bad_token = 666
-batch_size = 512
+batch_size = 256 # training_args.per_device_train_batch_size
 rand_size = batch_size // 4
 
 # %%
@@ -158,7 +159,9 @@ while True:
     g_key_msg = torch.cat((g, key, msg), axis=1)
     g_key_msg_emsg = ann.generate(g_key_msg, **gen_args)
     emsg = g_key_msg_emsg[:, -1:]
-    emsg[:rand_size] = torch.randint(1, max_val + 1, size=(rand_size,1)).to("cuda")
+    # emsg[:rand_size] = torch.randint(1, max_val + 1, size=(rand_size,1)).to("cuda")
+    xored_ideal = ((key + msg) % 2) + 1
+    emsg[:rand_size] = xored_ideal[:rand_size]
 
     # bob and cid try to decrypt
     key_emsg = torch.cat((key, emsg), axis=1)
@@ -167,6 +170,7 @@ while True:
 
     # is it succesful
     success = (msg == bmsg).logical_and(msg != cmsg).squeeze()
+    # success[:rand_size] = True
     failure = success.logical_not()
 
     # insert the first token to indicate whether transmission succeeded
@@ -177,22 +181,23 @@ while True:
     ### training ###
 
     # train alice
-    groups = []
-    for s in [good_token, bad_token]:
-        s_mask = s_key_msg_emsg[:, 0] == s
-        for val in range(1, max_val + 1):
-            v_mask = s_key_msg_emsg[:, -1] == val
-            sv_mask = s_mask.logical_and(v_mask)
-            sv_indexes = sv_mask.nonzero().flatten()
+    # groups = []
+    # for s in [good_token, bad_token]:
+    #     s_mask = s_key_msg_emsg[:, 0] == s
+    #     for val in range(1, max_val + 1):
+    #         v_mask = s_key_msg_emsg[:, -1] == val
+    #         sv_mask = s_mask.logical_and(v_mask)
+    #         sv_indexes = sv_mask.nonzero().flatten()
 
-            # shuffle
-            perm = torch.randperm(len(sv_indexes))
-            groups.append(sv_indexes[perm])
+    #         # shuffle
+    #         perm = torch.randperm(len(sv_indexes))
+    #         groups.append(sv_indexes[perm])
 
-    min_count = min(len(g) for g in groups)
-    equianswer_indexes = torch.cat([g[:min_count] for g in groups])
-    if len(equianswer_indexes) == 0:
-        continue
+    # min_count = min(len(g) for g in groups)
+    # equianswer_indexes = torch.cat([g[:min_count] for g in groups])
+    # if len(equianswer_indexes) == 0:
+    #     continue
+    equianswer_indexes = list(range(len(s_key_msg_emsg)))
 
     ann_trainer.train_dataset = DatasetWrapper(s_key_msg_emsg[equianswer_indexes])
     ann_trainer.train()
