@@ -137,16 +137,17 @@ cid_trainer.log = lambda logs: None
 gen_args = dict(
     max_new_tokens=1,
     pad_token_id=tokenizer.eos_token_id,
-    temperature=1,
+    temperature=1.,
     do_sample=True,
 )
 
 good_token = 777
 bad_token = 666
 batch_size = 256 # training_args.per_device_train_batch_size
-rand_size = batch_size // 8
+rand_size = batch_size // 16
 
 # %%
+total_examples = 0
 while True:
 # for i in range(1):
     # get random inputs
@@ -179,23 +180,21 @@ while True:
 
     ### training ###
     # train alice
-    # groups = []
-    # for s in [good_token, bad_token]:
-    #     s_mask = s_key_msg_emsg[:, 0] == s
-    #     for val in range(1, max_val + 1):
-    #         v_mask = s_key_msg_emsg[:, -1] == val
-    #         sv_mask = s_mask.logical_and(v_mask)
-    #         sv_indexes = sv_mask.nonzero().flatten()
-
-    #         # shuffle
-    #         perm = torch.randperm(len(sv_indexes))
-    #         groups.append(sv_indexes[perm])
-
-    # min_count = min(len(g) for g in groups)
-    # equianswer_indexes = torch.cat([g[:min_count] for g in groups])
-    # if len(equianswer_indexes) == 0:
-    #     continue
-    equianswer_indexes = list(range(len(s_key_msg_emsg)))
+    groups = []
+    for s in [good_token, bad_token]:
+        s_mask = s_key_msg_emsg[:, 0] == s
+        for val in range(1, max_val + 1):
+            v_mask = s_key_msg_emsg[:, -1] == val
+            sv_mask = s_mask.logical_and(v_mask)
+            sv_indexes = sv_mask.nonzero().flatten()
+            # shuffle
+            perm = torch.randperm(len(sv_indexes))
+            groups.append(sv_indexes[perm])
+    min_count = min(len(g) for g in groups)
+    equianswer_indexes = torch.cat([g[:min_count] for g in groups])
+    if len(equianswer_indexes) == 0:
+        continue
+    # equianswer_indexes = list(range(len(s_key_msg_emsg)))
 
     ann_trainer.train_dataset = DatasetWrapper(s_key_msg_emsg[equianswer_indexes])
     ann_trainer.train()
@@ -213,10 +212,12 @@ while True:
     ### stats ###
     print("success, key, msg, emsg, bmsg, cmsg")
     print(torch.cat((s_key_msg_emsg, bmsg, cmsg), axis=1))
+    total_examples += len(equianswer_indexes)
     stats = dict(
         # accuracy=float(success.float().mean()),
         accuracy=float(success[rand_size:].float().mean()),
         total_batch_len=len(equianswer_indexes),
+        total_examples=total_examples,
     )
     pprint(stats)
     

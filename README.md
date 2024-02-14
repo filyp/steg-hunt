@@ -18,6 +18,10 @@ So the problem is that to know whether a change to Alice's policy is good, we'd 
 
 **Maybe there is some insight from RL or MARL that helps deal with this.**
 
-In send_secret.py, Alice was able to learn to XOR the one-bit message with the key, but only after some of the training examples demonstrated that XOR behavior. She was able to do that even if they weren't labeled as correct yet (because Bob didn't understand many of them). Only later Bob learned, and they became correct. As little as 1/8 of training data set to showcase XOR policy was enough to kickstart the grokking.
+In send_secret.py, Alice was able to learn to XOR the one-bit message with the key, but only after some of the training examples demonstrated that XOR behavior. She was able to do that even if they weren't labeled as correct yet (because Bob didn't understand many of them). Only later Bob learned, and they became correct. As little as 1/16 of training data set to showcase XOR policy was enough to kickstart the grokking. (If we balance the answers for the training data. If we don't balance, 1/8 was needed.)
 
 (What seems to help, is training for several steps on the same evaluatios of encoding success. I'm not sure though.)
+
+Takeaway: agents spontaneously learning cryptography/steganography in a multi-agent setup, seems not likely. But sufficiently generally capable agents, could just try to do cryptography on purpose (rather than learning it by chance like in this setup). This requires some deliberation, and probably the best way to catch it is to improve reasoning transparency, and continuously monitor it.
+
+Question: would a similar stag-hunt problem happen in single-agent case of agent forced to use steganography by RLHF? (Encoding that it tries to use isn't understandable to its future self, so isn't immediately useful, so isn't reinforced.)
