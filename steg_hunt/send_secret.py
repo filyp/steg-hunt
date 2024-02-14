@@ -134,18 +134,17 @@ ann_trainer.log = lambda logs: None
 bob_trainer.log = lambda logs: None
 cid_trainer.log = lambda logs: None
 
-# %%
 gen_args = dict(
     max_new_tokens=1,
     pad_token_id=tokenizer.eos_token_id,
-    temperature=0.5,
+    temperature=1,
     do_sample=True,
 )
 
 good_token = 777
 bad_token = 666
 batch_size = 256 # training_args.per_device_train_batch_size
-rand_size = batch_size // 4
+rand_size = batch_size // 8
 
 # %%
 while True:
@@ -159,6 +158,7 @@ while True:
     g_key_msg = torch.cat((g, key, msg), axis=1)
     g_key_msg_emsg = ann.generate(g_key_msg, **gen_args)
     emsg = g_key_msg_emsg[:, -1:]
+    # try to guide it
     # emsg[:rand_size] = torch.randint(1, max_val + 1, size=(rand_size,1)).to("cuda")
     xored_ideal = ((key + msg) % 2) + 1
     emsg[:rand_size] = xored_ideal[:rand_size]
@@ -174,12 +174,10 @@ while True:
     failure = success.logical_not()
 
     # insert the first token to indicate whether transmission succeeded
-    # todo? limit the number of bad examples 
     s_key_msg_emsg = g_key_msg_emsg.clone().detach()
     s_key_msg_emsg[failure, 0] = bad_token
 
     ### training ###
-
     # train alice
     # groups = []
     # for s in [good_token, bad_token]:
